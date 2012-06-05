@@ -3,7 +3,7 @@
 #include <string.h>
 #include <cv.h>
 #include <highgui.h>
-
+#include <math.h>
 
 void outputAsText( char input[], char output[], char textFileName[] ){
   
@@ -214,7 +214,82 @@ void colorConversion( char inputImageFile[],
 }
 
 
+void computeLookUpTable( char inputImageFile[],
+			 char outputImageFile[],
+			 char LUTFileName[])
+{
+  IplImage *input = cvLoadImage( inputImageFile, CV_LOAD_IMAGE_COLOR );
+  IplImage *output = cvLoadImage( outputImageFile, CV_LOAD_IMAGE_COLOR );
+
+
+  CvMat *LookUpTable = cvCreateMat( 3, 256, CV_64FC1 );
+  CvMat *count = cvCreateMat( 3, 256, CV_32SC1 );
+  cvSetZero( LookUpTable );
+  cvSetZero( count );
+  
+  for( int h = 0; h < input->height; ++h ){
+    for( int w = 0; w < input->width; ++w ){
+      for( int c = 0; c < 3; ++c ){
+	int in = CV_IMAGE_ELEM( input, uchar, h, w*3+c );
+	int out = CV_IMAGE_ELEM( output, uchar, h, w*3+c );
+	CV_MAT_ELEM( *LookUpTable, double, c, in ) += out;
+	CV_MAT_ELEM( *count, int, c, in ) ++ ;
+      }
+    }
+  }
+
+  
+  for( int c = 0; c < 3; ++c ){
+    for( int cols = 0; cols < LookUpTable->cols; ++cols){
+      
+      double val = CV_MAT_ELEM( *LookUpTable, double, c, cols ) / (double) CV_MAT_ELEM( *count, int, c, cols );
+      if( isnan( val ) ){
+	val = cols;
+      }else if ( val < 0 ){
+	val = 0.0;
+      }else if ( val > 255 ){
+	val = 255;
+      }
+      
+      CV_MAT_ELEM( *LookUpTable, double, c, cols ) = val;
+
+    }
+  }
+
+  cvReleaseMat(&count);
+  writeMatrix( LookUpTable, "LookUpTable", LUTFileName );
+  //printMat( LookUpTable );
+}
+
+
+IplImage* LookUpTableTransform( IplImage *src, CvMat* lut ){
+  IplImage *dst = cvCreateImage( cvGetSize(src), IPL_DEPTH_8U, 3);
+
+  for(int h = 0; h < dst->height; ++h ){
+    for( int w = 0; w < dst->width; ++w){
+      for(int c = 0; c < 3; ++c ){
+	int in = CV_IMAGE_ELEM( src, uchar, h, w*3+c );
+	int out = CV_MAT_ELEM( *lut, double, c, in );
+	CV_IMAGE_ELEM( dst, uchar, h, w*3+c ) = out;
+      }
+    }
+  }
+  return dst;
+}
+
+void LookUpTableTransformTest( int argc, char* argv[] ){
+  
+  IplImage *src = cvLoadImage( argv[1], CV_LOAD_IMAGE_COLOR );
+  CvMat *lut = readMatrix( argv[2] ,"LookUpTable");
+  IplImage *dst = LookUpTableTransform( src, lut );
+  cvSaveImage( argv[3], dst, NULL );
+
+}
+
+
 int main( int argc, char* argv[] ){
   //calibColorCollectionMatrix( argv[1], argv[2], argv[3] );
-  colorConversion( argv[1], argv[2], argv[3] );
+  //colorConversion( argv[1], argv[2], argv[3] );
+  //computeLookUpTable( argv[1], argv[2], argv[3] );
+  LookUpTableTransformTest( argc, argv );
 }
