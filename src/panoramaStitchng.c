@@ -8,9 +8,9 @@
 
 #define MAX_INPUT_NUM 20
 #define SURF_TH 0.1
-#define SURF_HESSEIAN 700
+#define SURF_HESSEIAN 750
 #define SURF_DESC_DIM 128
-#define RANSAC_TH 0.05
+#define RANSAC_TH 0.1
 
 int _images;
 IplImage* _img[MAX_INPUT_NUM];
@@ -39,6 +39,9 @@ int matchPointsInImages( CvSeq* keypoint1, CvSeq* descriptor1,
 int nearestNeighbor( float *vec, int laplacian, CvSeq* keypoint, CvSeq* descriptor);
 
 double euclidDistance( float x[], float y[], int dim );
+
+void findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage);
+
 
 int findTransformMatrix( CvSeq* pt1, CvSeq* pt2, CvMat* dst );
 
@@ -156,6 +159,7 @@ int extractKeyPoints( IplImage* src,
 		      CvSeq** keypoint, CvSeq** descriptor, 
 		      CvMemStorage* storage)
 {
+  
   CvSURFParams param = cvSURFParams(SURF_HESSEIAN, 1);
   cvExtractSURF( src, NULL, keypoint, descriptor, storage, param, 0);
 }
@@ -328,5 +332,22 @@ IplImage* showCorrespondence( IplImage* img1, IplImage* img2, CvSeq *corresponde
   }
 
   return img;
+
+}
+
+
+void findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage)
+{
+  // だいたいどれくらいの移動量があるかを計算
+  // 画像の縦方向をベクトルとして，相関を図る
+  int shift = 0;
+
+  // その被ってる領域で特徴量を抽出
+
+  // 抽出した特徴量をマッチング
+
+  // 対応点を得る
+
+
 
 }
