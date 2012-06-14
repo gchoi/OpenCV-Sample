@@ -40,7 +40,7 @@ int nearestNeighbor( float *vec, int laplacian, CvSeq* keypoint, CvSeq* descript
 
 double euclidDistance( float x[], float y[], int dim );
 
-void findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage);
+IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage);
 
 
 int findTransformMatrix( CvSeq* pt1, CvSeq* pt2, CvMat* dst );
@@ -78,6 +78,7 @@ int panoramaStitching( int inputImages,
    _images = inputImages;
    int i;
 
+
    // A : varidation and loading
    if( _images >= MAX_INPUT_NUM ) return 1;
    for(  i = 0; i < _images ; ++i )
@@ -89,6 +90,15 @@ int panoramaStitching( int inputImages,
    Scale = ( Height > Width ) ? Height : Width ;
    printf("size = %lf, %lf\n", Width, Height);
 
+   
+   for( i = 0; i < _images-1 ; ++i ){
+     IplImage *tmp = findCorrespondence( _img[i], _img[i+1], NULL, NULL );
+     char filename[256];
+     sprintf( filename, "matching%02d.png", i);
+     cvSaveImage( filename, tmp , NULL);
+   }
+
+   return 0;
 
    // B : Extracs keypoints
    CvSeq* keypoints[MAX_INPUT_NUM];
@@ -336,11 +346,61 @@ IplImage* showCorrespondence( IplImage* img1, IplImage* img2, CvSeq *corresponde
 }
 
 
-void findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage)
+IplImage *rotate( IplImage *src ) {
+  IplImage *dst = cvCreateImage( cvSize( src->height, src->width), IPL_DEPTH_8U, 1 );
+  for( int h = 0 ; h < dst->height; ++h ){
+    for( int w = 0; w < dst->width; ++w ){
+      CV_IMAGE_ELEM( dst, uchar, h, w ) = CV_IMAGE_ELEM( src, uchar, w, h );
+    }
+  }
+  return dst;
+}
+
+
+double sad( unsigned char a[], unsigned char b[] , int dim){
+  double ret = 0.0;
+  for( int i = 0; i < dim; ++i ){
+    ret += ( a[i] < b[i] ) ? b[i] - a[i] : a[i] - b[i];
+  }
+  return ret;
+}
+
+IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage)
 {
+  int h, w;
+
   // だいたいどれくらいの移動量があるかを計算
   // 画像の縦方向をベクトルとして，相関を図る
+  // 縦方向の探索では遅くなるので、回転して横方向の探索に
+  IplImage *leftRotate = rotate( imgLeft );
+  IplImage *rightRotate = rotate( imgRight );
+  
   int shift = 0;
+  double minCorr = DBL_MAX;
+  for( int s = 0; s < imgLeft->width; ++s ){
+    double cor = 0.0;
+    double lines = 0.0;
+
+    for( h = 0; h < rightRotate->height; ++h ){
+      if( h + s >= imgRight->width ) continue;
+      cor += sad( leftRotate->imageData + h * leftRotate->widthStep,
+		  rightRotate->imageData + (h+s) * rightRotate->widthStep,
+		  imgLeft->height );
+      lines += 1.0;
+    }
+
+    cor /= lines;
+    //printf("cor at %d = %lf\n", s, cor);
+    if( cor < minCorr && lines != 0.0 ){
+      minCorr = cor;
+      shift = s;
+    }
+    
+  }
+  printf("shift = %d\n", shift);
+
+  cvReleaseImage( &leftRotate );
+  cvReleaseImage( &rightRotate );
 
   // その被ってる領域で特徴量を抽出
 
@@ -348,6 +408,14 @@ void findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspo
 
   // 対応点を得る
 
-
+  int Width = imgLeft->width + imgRight->width - shift; 
+  IplImage *img = cvCreateImage( cvSize( Width, imgLeft->height), IPL_DEPTH_8U, 1);
+  for( h = 0; h < imgLeft->height; ++h ){
+    for( w = 0 ; w < imgLeft->width; ++w ){
+      CV_IMAGE_ELEM( img, uchar, h, w+shift ) = CV_IMAGE_ELEM( imgLeft, uchar, h, w) / 2.0;
+      CV_IMAGE_ELEM( img, uchar, h, w ) = CV_IMAGE_ELEM( imgRight, uchar, h, w) / 2.0;
+    }
+  }
+  return img;
 
 }
