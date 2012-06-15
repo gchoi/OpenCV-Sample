@@ -14,8 +14,8 @@
 
 int _images;
 IplImage* _img[MAX_INPUT_NUM];
-double Height;
-double Width;
+double Height = 768;
+double Width = 551;
 double Scale;
 
 #define SQUARE(x) ((x)*(x))
@@ -81,49 +81,56 @@ int panoramaStitching( int inputImages,
 
    // A : varidation and loading
    if( _images >= MAX_INPUT_NUM ) return 1;
-   for(  i = 0; i < _images ; ++i )
-     _img[i] = cvLoadImage( inputImagesFile[i], CV_LOAD_IMAGE_GRAYSCALE );
+   for(  i = 0; i < _images ; ++i ){
+     IplImage *load = cvLoadImage( inputImagesFile[i], CV_LOAD_IMAGE_GRAYSCALE );
+     _img[i] = cvCreateImage( cvSize( Width, Height), IPL_DEPTH_8U, 1); 
+     cvResize( load, _img[i], CV_INTER_NN );
+     cvReleaseImage( &load );
+   }
    CvMemStorage *storage = cvCreateMemStorage(0);
 
-   Height = _img[0]->height;
-   Width = _img[0]->width;
    Scale = ( Height > Width ) ? Height : Width ;
    printf("size = %lf, %lf\n", Width, Height);
 
-   
+
+   CvSeq* correspondents[MAX_INPUT_NUM-1];   
    for( i = 0; i < _images-1 ; ++i ){
-     IplImage *tmp = findCorrespondence( _img[i], _img[i+1], NULL, NULL );
+     IplImage *tmp = findCorrespondence( _img[i], _img[i+1], &correspondents[i], storage );
+     IplImage *corr = showCorrespondence( _img[i+1], _img[i], correspondents[i] );
+     printf("correspondent match done\n");
      char filename[256];
      sprintf( filename, "matching%02d.png", i);
-     cvSaveImage( filename, tmp , NULL);
+     cvSaveImage( filename, corr , NULL);
+     cvReleaseImage( &corr );
    }
 
-   return 0;
+   /* // B : Extracs keypoints */
+   /* CvSeq* keypoints[MAX_INPUT_NUM]; */
+   /* CvSeq* descriptors[MAX_INPUT_NUM]; */
+   /* for( i = 0; i < _images ; ++i ){ */
+   /*   extractKeyPoints( _img[i], &keypoints[i], &descriptors[i], storage); */
+   /* } */
+   /* printf("extract keypoints done\n"); */
 
-   // B : Extracs keypoints
-   CvSeq* keypoints[MAX_INPUT_NUM];
-   CvSeq* descriptors[MAX_INPUT_NUM];
-   for( i = 0; i < _images ; ++i ){
-     extractKeyPoints( _img[i], &keypoints[i], &descriptors[i], storage);
-   }
-   printf("extract keypoints done\n");
+   /* // C : Matching images */
+   /* CvSeq* correspondents[MAX_INPUT_NUM-1]; */
+   /* for( i = 0; i < _images-1 ; ++i ){ */
+   /*   matchPointsInImages( keypoints[i]  , descriptors[i], */
+   /* 			  keypoints[i+1], descriptors[i+1], */
+   /* 			  &correspondents[i], storage ); */
+   /*   printf("%d -> %d correspondent points = %d \n", i, i+1, correspondents[i]->total); */
 
-   // C : Matching images
-   CvSeq* correspondents[MAX_INPUT_NUM-1];
-   for( i = 0; i < _images-1 ; ++i ){
-     matchPointsInImages( keypoints[i]  , descriptors[i],
-			  keypoints[i+1], descriptors[i+1],
-			  &correspondents[i], storage );
-     printf("%d -> %d correspondent points = %d \n", i, i+1, correspondents[i]->total);
+   /*   IplImage* toshow = showCorrespondence( _img[i], _img[i+1], correspondents[i] ); */
+   /*   char filename[256]; */
+   /*   sprintf( filename, "matching%02d.png", i); */
+   /*   cvSaveImage( filename, toshow , NULL); */
 
-     IplImage* toshow = showCorrespondence( _img[i], _img[i+1], correspondents[i] );
-     char filename[256];
-     sprintf( filename, "matching%02d.png", i);
-     cvSaveImage( filename, toshow , NULL);
-
-   }
-   printf("matching keypoints done\n");
+   /* } */
+   /* printf("matching keypoints done\n"); */
    
+   
+
+
 
    // finding transform matrix
    CvMat* transformMat[MAX_INPUT_NUM];
@@ -356,15 +363,15 @@ IplImage *rotate( IplImage *src ) {
   return dst;
 }
 
-
-double sad( unsigned char a[], unsigned char b[] , int dim){
+double sad( IplImage *imgA, int hA, IplImage *imgB, int hB )
+{
   double ret = 0.0;
-  for( int i = 0; i < dim; ++i ){
-    ret += ( a[i] < b[i] ) ? b[i] - a[i] : a[i] - b[i];
+  for( int i = 0; i < imgA->width; ++ i){
+    double val = CV_IMAGE_ELEM( imgA, uchar, hA,i ) - CV_IMAGE_ELEM( imgB, uchar, hB,i );
+    ret += ( val < 0 ) ? -val : val;
   }
   return ret;
 }
-
 IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage)
 {
   int h, w;
@@ -374,23 +381,19 @@ IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** cor
   // 縦方向の探索では遅くなるので、回転して横方向の探索に
   IplImage *leftRotate = rotate( imgLeft );
   IplImage *rightRotate = rotate( imgRight );
-  
+
   int shift = 0;
   double minCorr = DBL_MAX;
   for( int s = 0; s < imgLeft->width; ++s ){
     double cor = 0.0;
     double lines = 0.0;
-
     for( h = 0; h < rightRotate->height; ++h ){
       if( h + s >= imgRight->width ) continue;
-      cor += sad( leftRotate->imageData + h * leftRotate->widthStep,
-		  rightRotate->imageData + (h+s) * rightRotate->widthStep,
-		  imgLeft->height );
+      cor += sad( leftRotate, h, rightRotate, h+s );
       lines += 1.0;
     }
 
     cor /= lines;
-    //printf("cor at %d = %lf\n", s, cor);
     if( cor < minCorr && lines != 0.0 ){
       minCorr = cor;
       shift = s;
@@ -403,19 +406,37 @@ IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** cor
   cvReleaseImage( &rightRotate );
 
   // その被ってる領域で特徴量を抽出
+  int mergin = imgLeft->width - shift;
+  cvSetImageROI( imgRight, cvRect(shift, 0, mergin, Height )) ;
+  cvSetImageROI( imgLeft, cvRect( 0, 0, mergin, Height )) ;
+
+  CvSeq *keypoint1, *descriptors1, *keypoint2, *descriptors2;
+  extractKeyPoints( imgLeft, &keypoint1, &descriptors1, storage );
+  extractKeyPoints( imgRight, &keypoint2, &descriptors2, storage );
+
+  matchPointsInImages( keypoint1, descriptors1, keypoint2, descriptors2, correspondent, storage );
+
+  cvResetImageROI(imgLeft);
+  cvResetImageROI(imgRight);
+  cvClearSeq( keypoint1 );
+  cvClearSeq( keypoint2 );
+  cvClearSeq( descriptors1 );
+  cvClearSeq( descriptors2 );
+
+
 
   // 抽出した特徴量をマッチング
 
   // 対応点を得る
 
-  int Width = imgLeft->width + imgRight->width - shift; 
-  IplImage *img = cvCreateImage( cvSize( Width, imgLeft->height), IPL_DEPTH_8U, 1);
-  for( h = 0; h < imgLeft->height; ++h ){
-    for( w = 0 ; w < imgLeft->width; ++w ){
-      CV_IMAGE_ELEM( img, uchar, h, w+shift ) = CV_IMAGE_ELEM( imgLeft, uchar, h, w) / 2.0;
-      CV_IMAGE_ELEM( img, uchar, h, w ) = CV_IMAGE_ELEM( imgRight, uchar, h, w) / 2.0;
-    }
-  }
-  return img;
-
+  /* int Width = imgLeft->width + imgRight->width - shift;  */
+  /* IplImage *img = cvCreateImage( cvSize( Width, imgLeft->height), IPL_DEPTH_8U, 1); */
+  /* for( h = 0; h < imgLeft->height; ++h ){ */
+  /*   for( w = 0 ; w < imgLeft->width; ++w ){ */
+  /*     CV_IMAGE_ELEM( img, uchar, h, w+shift ) = CV_IMAGE_ELEM( imgLeft, uchar, h, w) / 2.0; */
+  /*     CV_IMAGE_ELEM( img, uchar, h, w ) = CV_IMAGE_ELEM( imgRight, uchar, h, w) / 2.0; */
+  /*   } */
+  /* } */
+  /* return img; */
+  return NULL;
 }
