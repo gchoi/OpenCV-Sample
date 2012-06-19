@@ -40,7 +40,7 @@ int nearestNeighbor( float *vec, int laplacian, CvSeq* keypoint, CvSeq* descript
 
 double euclidDistance( float x[], float y[], int dim );
 
-IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage);
+void findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage);
 
 
 int findTransformMatrix( CvSeq* pt1, CvSeq* pt2, CvMat* dst );
@@ -95,9 +95,8 @@ int panoramaStitching( int inputImages,
 
    CvSeq* correspondents[MAX_INPUT_NUM-1];   
    for( i = 0; i < _images-1 ; ++i ){
-     IplImage *tmp = findCorrespondence( _img[i], _img[i+1], &correspondents[i], storage );
-     IplImage *corr = showCorrespondence( _img[i+1], _img[i], correspondents[i] );
-     printf("correspondent match done\n");
+     findCorrespondence( _img[i], _img[i+1], &correspondents[i], storage );
+     IplImage *corr = showCorrespondence( _img[i], _img[i+1], correspondents[i] );
      char filename[256];
      sprintf( filename, "matching%02d.png", i);
      cvSaveImage( filename, corr , NULL);
@@ -344,8 +343,11 @@ IplImage* showCorrespondence( IplImage* img1, IplImage* img2, CvSeq *corresponde
   for( int i = 0; i < correspondent->total; i+=2 ){
     CvPoint2D32f *pt1 = (CvPoint2D32f*)cvGetSeqElem( correspondent, i );
     CvPoint2D32f *pt2 = (CvPoint2D32f*)cvGetSeqElem( correspondent, i+1 );
-    pt2->x += img1->width;
-    cvLine( img, cvPointFrom32f(*pt1), cvPointFrom32f(*pt2), cvScalarAll( 128 ), 1, 4, 0);
+
+    CvPoint ptA = cvPoint( pt1->x, pt1->y );
+    CvPoint ptB = cvPoint( pt2->x + img1->width, pt2->y );
+    
+    cvLine( img, ptA, ptB , cvScalarAll( 128 ), 1, 4, 0);
   }
 
   return img;
@@ -372,7 +374,8 @@ double sad( IplImage *imgA, int hA, IplImage *imgB, int hB )
   }
   return ret;
 }
-IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage)
+
+void findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** correspondent, CvMemStorage* storage)
 {
   int h, w;
 
@@ -414,6 +417,12 @@ IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** cor
   extractKeyPoints( imgLeft, &keypoint1, &descriptors1, storage );
   extractKeyPoints( imgRight, &keypoint2, &descriptors2, storage );
 
+  for( int i = 0; i < keypoint2->total ; ++i ){
+    CvPoint2D32f *pt = (CvPoint2D32f *)cvGetSeqElem( keypoint2, i );
+    pt->x += shift;
+  }
+
+
   matchPointsInImages( keypoint1, descriptors1, keypoint2, descriptors2, correspondent, storage );
 
   cvResetImageROI(imgLeft);
@@ -438,5 +447,5 @@ IplImage* findCorrespondence( IplImage* imgLeft, IplImage* imgRight, CvSeq** cor
   /*   } */
   /* } */
   /* return img; */
-  return NULL;
+  return;
 }
