@@ -49,7 +49,7 @@ int main( int argc, char *argv[] ){
   FlannBasedMatcher matcher;
   vector<DMatch> match;
   for( int i = 0; i < imgs.size()-1; ++ i ){
-    matcher.match( imgs[i]->desc, imgs[i+1]->desc, match);
+    matcher.radiusMatch( imgs[i]->desc, imgs[i+1]->desc, match, 0.5);
     printf("%2d -> %2d : matched %d points\n", i, i+1, (int)match.size());
 
     char filename[256];
