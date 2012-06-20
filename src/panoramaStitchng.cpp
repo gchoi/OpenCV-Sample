@@ -5,6 +5,7 @@
 
 #include <cv.h>
 #include <highgui.h>
+#include <opencv2/nonfree/nonfree.hpp>
 
 using namespace std;
 using namespace cv;
@@ -47,17 +48,28 @@ int main( int argc, char *argv[] ){
 
   // match keypoints
   FlannBasedMatcher matcher;
-  vector<DMatch> match;
+  vector< vector<DMatch> > matches;
   for( int i = 0; i < imgs.size()-1; ++ i ){
-    matcher.match( imgs[i]->desc, imgs[i+1]->desc, match);
-    printf("%2d -> %2d : matched %d points\n", i, i+1, (int)match.size());
+    matcher.radiusMatch( imgs[i]->desc, imgs[i+1]->desc, matches, 0.3);
 
     char filename[256];
     sprintf( filename, "matching%02d.png", i );
     Mat dst;
+
+
+    vector<DMatch> topMatch;
+    for( int j = 0; j < matches.size() ; ++ j ){
+      for( int h =0 ; h < matches[j].size(); ++h) {
+	  DMatch pt = matches[j][h];
+	  topMatch.push_back( pt );
+	}
+    }
+
+
+
     drawMatches( imgs[i]->img, imgs[i]->kpt, 
 		 imgs[i+1]->img, imgs[i+1]->kpt,
-		 match, dst);
+		 topMatch, dst);
     printf("%s\n", filename);
     imwrite( filename, dst );
 
