@@ -33,7 +33,6 @@ private:
 
 
 
-
 int main( int argc, char *argv[] ){
   if( argc < 1 ) return 1;
 
@@ -53,26 +52,41 @@ int main( int argc, char *argv[] ){
 
     matcher.radiusMatch( imgs[i]->desc, imgs[i+1]->desc, matches, 0.3);
 
+    vector<DMatch> topMatch;
+    for( int j = 0; j < matches.size() ; ++ j ){
+      if( matches[j].size() > 0 )
+	topMatch.push_back( matches[j][0] );
+    }
+
     char filename[256];
     sprintf( filename, "matching%02d.png", i );
     Mat dst;
-
-
-    vector<DMatch> topMatch;
-    for( int j = 0; j < matches.size() ; ++ j ){
-      for( int h =0 ; h < matches[j].size(); ++h) {
-	  DMatch pt = matches[j][h];
-	  topMatch.push_back( pt );
-	}
-    }
-
-
-
     drawMatches( imgs[i]->img, imgs[i]->kpt, 
 		 imgs[i+1]->img, imgs[i+1]->kpt,
 		 topMatch, dst);
     printf("%s\n", filename);
     imwrite( filename, dst );
+
+    
+    vector<Point2f> srcPoints, dstPoints;
+    for( int j = 0; j < topMatch.size() ; ++j ){
+      int srcIdx = topMatch[j].queryIdx;
+      int dstIdx = topMatch[j].trainIdx;
+      KeyPoint srcKpt = imgs[i]->kpt[srcIdx];
+      KeyPoint dstKpt = imgs[i+1]->kpt[dstIdx];
+      srcPoints.push_back( srcKpt.pt );
+      dstPoints.push_back( dstKpt.pt );
+    }
+
+    Mat homography = findHomography( srcPoints, dstPoints, CV_RANSAC, 3);
+    for( int h = 0; h < homography.rows; ++h ){
+      for( int w = 0; w < homography.cols; ++w ){
+	printf("\t%lf", homography.at<double>(h, w) );
+      }
+      printf("\n");
+    }
+
+
 
   }
 
