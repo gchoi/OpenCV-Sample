@@ -20,6 +20,7 @@ public:
   vector<KeyPoint> kpt;
   int height;
   int width;
+  Mat homography;
 
   // methods
   Image( char filename[] );
@@ -78,15 +79,23 @@ int main( int argc, char *argv[] ){
       dstPoints.push_back( dstKpt.pt );
     }
 
-    Mat homography = findHomography( srcPoints, dstPoints, CV_RANSAC, 3);
+    imgs[i].homography = findHomography( srcPoints, dstPoints, CV_RANSAC, 3);
     for( int h = 0; h < homography.rows; ++h ){
       for( int w = 0; w < homography.cols; ++w ){
 	printf("\t%lf", homography.at<double>(h, w) );
       }
       printf("\n");
     }
+  }
 
+  // project Image
+  Mat panorama = Mat( imgs[0].width * imgs.size(), imgs[0].height * imgs.size(), CV_8UC1 );
+  Mat trans = eye( 3, 3, CV_64F );
+  Mat src = Mat( 1, 3, CV_64F );
+  Mat dst = Mat( 1, 3, CV_64F );
 
+  for( int i = 0; i < imgs.size() ; ++ i){
+    
 
   }
 
