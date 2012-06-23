@@ -79,23 +79,38 @@ int main( int argc, char *argv[] ){
       dstPoints.push_back( dstKpt.pt );
     }
 
-    imgs[i].homography = findHomography( srcPoints, dstPoints, CV_RANSAC, 3);
-    for( int h = 0; h < homography.rows; ++h ){
-      for( int w = 0; w < homography.cols; ++w ){
-	printf("\t%lf", homography.at<double>(h, w) );
+    imgs[i]->homography = findHomography( srcPoints, dstPoints, CV_RANSAC, 3);
+    for( int h = 0; h < imgs[i]->homography.rows; ++h ){
+      for( int w = 0; w < imgs[i]->homography.cols; ++w ){
+	printf("\t%lf", imgs[i]->homography.at<double>(h, w) );
       }
       printf("\n");
     }
   }
 
   // project Image
-  Mat panorama = Mat( imgs[0].width * imgs.size(), imgs[0].height * imgs.size(), CV_8UC1 );
-  Mat trans = eye( 3, 3, CV_64F );
+  Mat panorama = Mat( imgs[0]->width * imgs.size(), imgs[0]->height * imgs.size(), CV_8UC1 );
+  Mat trans = Mat::eye( 3, 3, CV_64F );
   Mat src = Mat( 1, 3, CV_64F );
   Mat dst = Mat( 1, 3, CV_64F );
 
   for( int i = 0; i < imgs.size() ; ++ i){
-    
+
+    for( int h = 0; h < imgs[i]->height; ++h ){
+      for( int w = 0; w < imgs[i]->width; ++w){
+	src.at<double>(0, 0) = w;
+	src.at<double>(0, 1) = h;
+	src.at<double>(0, 2) = 0;
+
+	dst = trans * src;
+	
+	if( h == imgs[i]->height/2 && w == imgs[i]->width/2)
+	  printf("%lf, %lf, %lf -> %lf, %lf, %lf\n", 
+		 src.at<double>( 0, 0), src.at<double>( 0, 1), src.at<double>( 0, 2),
+		 dst.at<double>( 0, 0), dst.at<double>( 0, 1), dst.at<double>( 0, 2));
+
+      }
+    }
 
   }
 
