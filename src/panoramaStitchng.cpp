@@ -32,7 +32,7 @@ private:
 
 };
 
-
+void printMat( Mat m );
 
 int main( int argc, char *argv[] ){
   if( argc < 1 ) return 1;
@@ -58,6 +58,7 @@ int main( int argc, char *argv[] ){
       if( matches[j].size() > 0 )
 	topMatch.push_back( matches[j][0] );
     }
+    printf("matches from %2d to %2d is %ld\n", i, i+1, topMatch.size());
 
     char filename[256];
     sprintf( filename, "matching%02d.png", i );
@@ -65,10 +66,8 @@ int main( int argc, char *argv[] ){
     drawMatches( imgs[i]->img, imgs[i]->kpt, 
 		 imgs[i+1]->img, imgs[i+1]->kpt,
 		 topMatch, dst);
-    printf("%s\n", filename);
     imwrite( filename, dst );
 
-    
     vector<Point2f> srcPoints, dstPoints;
     for( int j = 0; j < topMatch.size() ; ++j ){
       int srcIdx = topMatch[j].queryIdx;
@@ -80,39 +79,50 @@ int main( int argc, char *argv[] ){
     }
 
     imgs[i]->homography = findHomography( srcPoints, dstPoints, CV_RANSAC, 3);
-    for( int h = 0; h < imgs[i]->homography.rows; ++h ){
-      for( int w = 0; w < imgs[i]->homography.cols; ++w ){
-	printf("\t%lf", imgs[i]->homography.at<double>(h, w) );
-      }
-      printf("\n");
-    }
+    printMat( imgs[i]->homography );
   }
 
   // project Image
-  Mat panorama = Mat( imgs[0]->width * imgs.size(), imgs[0]->height * imgs.size(), CV_8UC1 );
+  int Width = imgs[0]->width * imgs.size() * 0.2;
+  int Height = imgs[0]->height * 2.0;
+  Mat panorama = Mat( Height, Width, CV_8UC1 );
   Mat trans = Mat::eye( 3, 3, CV_64F );
-  Mat src = Mat( 1, 3, CV_64F );
-  Mat dst = Mat( 1, 3, CV_64F );
+  Mat src = Mat( 3, 1, CV_64F );
+  Mat dst = Mat( 3, 1, CV_64F );
 
   for( int i = 0; i < imgs.size() ; ++ i){
 
     for( int h = 0; h < imgs[i]->height; ++h ){
       for( int w = 0; w < imgs[i]->width; ++w){
 	src.at<double>(0, 0) = w;
-	src.at<double>(0, 1) = h;
-	src.at<double>(0, 2) = 0;
+	src.at<double>(1, 0) = h;
+	src.at<double>(2, 0) = 1.0;
 
-	dst = trans * src;
+	dst = trans * src; 
 	
-	if( h == imgs[i]->height/2 && w == imgs[i]->width/2)
+	if( h == imgs[i]->height/2 && w == imgs[i]->width/2) {
 	  printf("%lf, %lf, %lf -> %lf, %lf, %lf\n", 
-		 src.at<double>( 0, 0), src.at<double>( 0, 1), src.at<double>( 0, 2),
-		 dst.at<double>( 0, 0), dst.at<double>( 0, 1), dst.at<double>( 0, 2));
+		 src.at<double>( 0, 0), src.at<double>( 1, 0), src.at<double>( 2, 0),
+		 dst.at<double>( 0, 0), dst.at<double>( 1, 0), dst.at<double>( 2, 0));
+	}
 
+	int x = dst.at<double>(0,0) ;
+	int y = dst.at<double>(1,0) ;
+	x += ( x < 0 )? panorama.cols : 0;
+	x -= (x >= panorama.cols ) ? panorama.cols : 0 ;
+	y += ( y < 0 )? panorama.rows : 0;
+	y -= (y >= panorama.rows ) ? panorama.rows : 0 ;
+
+	panorama.at<uchar>( y, x ) = imgs[i]->img.at<uchar>(h, w);
       }
     }
 
+    if( i != imgs.size() -1 )
+      trans = trans * imgs[i]->homography;
+    printMat( trans );
   }
+
+  imwrite( "panorama.png", panorama );
 
 
   return 0;
@@ -125,15 +135,20 @@ Image::Image( char filename[] ){
   height = img.rows;
   width = img.cols;
 
-  SurfFeatureDetector detector(2000);
+  SurfFeatureDetector detector(1000);
   detector.detect( img, kpt );
 
   SurfDescriptorExtractor extractor;
   extractor.compute( img, kpt, desc );
 
-
-  printf("surf operating done, ");
-  printf("%d points\n", (int)kpt.size());
+}
 
 
+void printMat( Mat m ){
+    for( int h = 0; h < m.rows; ++h ){
+      for( int w = 0; w < m.cols; ++w ){
+	printf("\t%lf", m.at<double>(h, w) );
+      }
+      printf("\n");
+    }
 }
