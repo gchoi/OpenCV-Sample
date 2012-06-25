@@ -7,6 +7,8 @@
 #include <highgui.h>
 #include <opencv2/nonfree/nonfree.hpp>
 
+#define SQUARE(x) ((x)*(x))
+
 using namespace std;
 using namespace cv;
 
@@ -35,7 +37,6 @@ private:
 void printMat( Mat m );
 Mat findRotationMatrix( const vector<Point2f> srcPoints, const vector<Point2f>  dstPoints );
 
-
 int main( int argc, char *argv[] ){
   if( argc < 1 ) return 1;
 
@@ -46,6 +47,8 @@ int main( int argc, char *argv[] ){
   for( int i = 1; i < argc; ++i ){ 
     imgs.push_back( new Image( argv[i] ) );
   }
+
+
 
 
   // match keypoints
@@ -80,7 +83,8 @@ int main( int argc, char *argv[] ){
       dstPoints.push_back( dstKpt.pt );
     }
 
-    imgs[i]->homography = findRotationMatrix( srcPoints, dstPoints );
+    imgs[i]->homography = findRotationMatrix( dstPoints, srcPoints );
+    printf("homography \n");
     printMat( imgs[i]->homography );
   }
 
@@ -119,9 +123,10 @@ int main( int argc, char *argv[] ){
       }
     }
 
-    if( i != imgs.size() -1 )
+    if( i != imgs.size() -1 ){
       trans = trans * imgs[i]->homography;
-    printMat( trans );
+      printMat( trans );
+    }
   }
 
   imwrite( "panorama.png", panorama );
@@ -149,7 +154,7 @@ Image::Image( char filename[] ){
 void printMat( Mat m ){
     for( int h = 0; h < m.rows; ++h ){
       for( int w = 0; w < m.cols; ++w ){
-	printf("\t%lf", m.at<double>(h, w) );
+	printf("\t%e", m.at<double>(h, w) );
       }
       printf("\n");
     }
@@ -158,34 +163,26 @@ void printMat( Mat m ){
 
 Mat findRotationMatrix( const vector<Point2f> srcPoints, const vector<Point2f>  dstPoints )
 {
-  double f = 1.0;
+  double f = 0.10;
   Mat A = Mat( srcPoints.size() * 2, 3,CV_64F);
   Mat y = Mat( srcPoints.size() * 2, 1, CV_64F);
 
-  for( int i = 0; i < A.rows; i += 2){
+  for( int i = 0; i < srcPoints.size() * 2; i += 2){
     
     Point2f srcPt = srcPoints[i/2];
     Point2f dstPt = dstPoints[i/2];
-    A.at<double>(0, i )	  = -srcPt.x * srcPt.y / f;
-    A.at<double>(1, i )	  = f + srcPt.x * srcPt.x  / f;
-    A.at<double>(2, i )	  = -srcPt.y;
-    A.at<double>(0, i+1 ) = -( f + srcPt.y * srcPt.y  / f );
-    A.at<double>(1, i+1 ) = srcPt.x * srcPt.y / f;
-    A.at<double>(2, i+1 ) = srcPt.x;
-    y.at<double>(0, i )   = dstPt.x - srcPt.x ;
-    y.at<double>(0, i+1 ) = dstPt.y - srcPt.y ;
-    printf("f = %lf\tsrc = %f, %f\t dst = %f, %f\n",f, srcPt.x, srcPt.y, dstPt.x, dstPt.y);
+    A.at<double>(i, 0 )	  = -srcPt.x * srcPt.y / f;
+    A.at<double>(i, 1 )	  = f + srcPt.x * srcPt.x  / f;
+    A.at<double>(i, 2 )	  = -srcPt.y;
+    A.at<double>(i+1, 0 ) = -( f + srcPt.y * srcPt.y  / f );
+    A.at<double>(i+1, 1 ) = srcPt.x * srcPt.y / f;
+    A.at<double>(i+1, 2 ) = srcPt.x;
+    y.at<double>(i, 0 )   = dstPt.x - srcPt.x ;
+    y.at<double>(i+1, 0 ) = dstPt.y - srcPt.y ;
+    //printf("f = %lf\tsrc = %f, %f\t dst = %f, %f\n",f, srcPt.x, srcPt.y, dstPt.x, dstPt.y);
   }
 
-  printf("putting done\n");
-
-  Mat AtA = A.t() * A;
-  printf("AtA\n");
-  printMat(AtA);
-  Mat AtAInv = AtA.inv(DECOMP_SVD);
-  printf("AtAInv\n");
-  printMat(AtAInv);
-  Mat omega = AtAInv * A.t() * y;
+  Mat omega = ( A.t() * A ).inv(DECOMP_SVD)*A.t()*y;
   printf("omega\n");
   printMat(omega);
   double wx = omega.at<double>( 0, 0 );
@@ -195,7 +192,11 @@ Mat findRotationMatrix( const vector<Point2f> srcPoints, const vector<Point2f>  
 		 0  , -wz,  wy,
 		 wz ,   0, -wx,
 		 -wy,  wx,   0);
-  return Mat::eye(3, 3, CV_64F) + nCross;
+  Mat Rot =  Mat::eye(3, 3, CV_64F) + nCross;
 
-
+  f = sqrt( ( Rot.at<double>(0,2) * Rot.at<double>(1,2) ) / 
+	    ( Rot.at<double>(0,0) * Rot.at<double>(1,0) +
+	      Rot.at<double>(0,1) * Rot.at<double>(1,1) ));
+  printf("f = %lf\n", f);
+  return Rot;
 }
