@@ -163,7 +163,7 @@ void printMat( Mat m ){
 
 Mat findRotationMatrix( const vector<Point2f> srcPoints, const vector<Point2f>  dstPoints )
 {
-  double f = 0.10;
+  double f = 1000.0;
   Mat A = Mat( srcPoints.size() * 2, 3,CV_64F);
   Mat y = Mat( srcPoints.size() * 2, 1, CV_64F);
 
@@ -193,10 +193,11 @@ Mat findRotationMatrix( const vector<Point2f> srcPoints, const vector<Point2f>  
 		 wz ,   0, -wx,
 		 -wy,  wx,   0);
   Mat Rot =  Mat::eye(3, 3, CV_64F) + nCross;
+  Rot.at<double>(2, 0 ) /= f;
+  Rot.at<double>(2, 1 ) /= f;
+  Rot.at<double>(0, 2 ) *= f;
+  Rot.at<double>(1, 2 ) *= f;
+  
 
-  f = sqrt( ( Rot.at<double>(0,2) * Rot.at<double>(1,2) ) / 
-	    ( Rot.at<double>(0,0) * Rot.at<double>(1,0) +
-	      Rot.at<double>(0,1) * Rot.at<double>(1,1) ));
-  printf("f = %lf\n", f);
-  return Rot;
+  return Rot.inv(DECOMP_SVD);
 }
